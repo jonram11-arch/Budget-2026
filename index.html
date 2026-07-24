@@ -1,5 +1,4 @@
 <!DOCTYPE html>
-
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -34,8 +33,8 @@ h2 { font-size: 18px; color: #f1f5f9; font-weight: 700; }
 .stat-sub { font-size: 11px; color: #64748b; }
 
 /* Tabs */
-.tabs { display: flex; gap: 3px; background: #1e293b; border-radius: 10px; padding: 4px; margin-bottom: 20px; }
-.tab { flex: 1; padding: 8px 4px; border-radius: 8px; border: none; cursor: pointer; font-size: 12px; font-weight: 600; font-family: inherit; background: transparent; color: #64748b; transition: all 0.2s; }
+.tabs { display: flex; gap: 3px; background: #1e293b; border-radius: 10px; padding: 4px; margin-bottom: 20px; flex-wrap: wrap; }
+.tab { flex: 1; padding: 8px 4px; border-radius: 8px; border: none; cursor: pointer; font-size: 12px; font-weight: 600; font-family: inherit; background: transparent; color: #64748b; transition: all 0.2s; min-width: 60px; }
 .tab.active { background: #334155; color: #f1f5f9; }
 
 .section-label { font-size: 11px; letter-spacing: 0.15em; color: #64748b; text-transform: uppercase; margin-bottom: 10px; margin-top: 20px; }
@@ -89,6 +88,7 @@ select.fi.chosen { color: #f1f5f9; }
 /* Payment badges */
 .badge { display: inline-block; padding: 1px 7px; border-radius: 4px; font-size: 10px; font-weight: 700; letter-spacing: 0.05em; }
 .b-Chase      { background:#1e3a5f; color:#60a5fa; border:1px solid #1d4ed8; }
+.b-ChaseSapphire { background:#0c2d3d; color:#22d3ee; border:1px solid #0e7490; }
 .b-Apple      { background:#2d1f3d; color:#c084fc; border:1px solid #7c3aed; }
 .b-Amex       { background:#1a3350; color:#7dd3fc; border:1px solid #0369a1; }
 .b-Debit      { background:#1a2e1a; color:#86efac; border:1px solid #166534; }
@@ -142,6 +142,13 @@ tr.tot-row td { border-top: 2px solid #334155; font-weight: 700; padding: 10px 6
 .adj-delta { font-weight: 700; font-size: 12px; }
 .footer { margin-top: 32px; text-align: center; font-size: 11px; color: #334155; padding-bottom: 16px; }
 .rollover-note { font-size: 11px; color: #fb923c; margin-top: 3px; }
+
+/* Cards tab */
+.card-summary { padding: 14px 16px; margin-bottom: 10px; background: #1e293b; border-radius: 10px; border: 1px solid #2d3748; }
+.card-summary-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.card-summary-total { font-size: 20px; font-weight: 700; color: #f1f5f9; }
+.card-summary-sub { font-size: 11px; color: #64748b; }
+.grand-total-box { margin-top: 20px; padding: 14px 16px; background: linear-gradient(135deg,#1e293b,#0f172a); border-radius: 10px; border: 1px solid #334155; display: flex; justify-content: space-between; align-items: center; }
 </style>
 
 </head>
@@ -182,12 +189,14 @@ tr.tot-row td { border-top: 2px solid #334155; font-weight: 700; padding: 10px 6
   <div class="tabs">
     <button class="tab active" id="tab-btn-entry"  onclick="showTab('entry')">—</button>
     <button class="tab"        id="tab-btn-txns"   onclick="showTab('txns')">Transactions</button>
+    <button class="tab"        id="tab-btn-cards"  onclick="showTab('cards')">Cards</button>
     <button class="tab"        id="tab-btn-history" onclick="showTab('history')">History</button>
     <button class="tab"        id="tab-btn-goals"  onclick="showTab('goals')">Goal</button>
   </div>
 
   <div id="tab-entry"></div>
   <div id="tab-txns"    style="display:none"></div>
+  <div id="tab-cards"   style="display:none"></div>
   <div id="tab-history" style="display:none"></div>
   <div id="tab-goals"   style="display:none"></div>
 
@@ -199,8 +208,8 @@ tr.tot-row td { border-top: 2px solid #334155; font-weight: 700; padding: 10px 6
 const INCOME = 8084.13;
 const WEDDING = new Date("2027-05-01");
 const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-const PAYMENT_METHODS = ["Chase","Apple Card","Amex","Debit","Cash","Other"];
-const BADGE_CLASS = {"Chase":"b-Chase","Apple Card":"b-Apple","Amex":"b-Amex","Debit":"b-Debit","Cash":"b-Cash","Other":"b-Other"};
+const PAYMENT_METHODS = ["Chase","Chase Sapphire","Apple Card","Amex","Debit","Cash","Other"];
+const BADGE_CLASS = {"Chase":"b-Chase","Chase Sapphire":"b-ChaseSapphire","Apple Card":"b-Apple","Amex":"b-Amex","Debit":"b-Debit","Cash":"b-Cash","Other":"b-Other"};
 
 const CATS = [
   {key:"gas",      label:"Gas",              budget:250 },
@@ -213,8 +222,8 @@ const CATS = [
 ];
 
 const FIXED_CATS = [
-  {key:"mortgage",  label:"Mortgage",   budget:3100, aprActual:3100  },
-  {key:"cell",      label:"Cell Phone", budget:205,  aprActual:206.58},
+  {key:"mortgage",  label:"Mortgage",   budget:3200, aprActual:3100  },
+  {key:"cell",      label:"Cell Phone", budget:166.63, aprActual:206.58},
   {key:"gym",       label:"Gym",        budget:60,   aprActual:60    },
   {key:"xbox",      label:"Xbox",       budget:23,   aprActual:39.98 },
 ];
@@ -580,13 +589,64 @@ function renderTxns() {
   document.getElementById("tab-txns").innerHTML = html;
 }
 
+// ── Render cards tab ────────────────────────────────────────────────────────────
+function renderCards() {
+  const all = getAllTxns();
+  const byMethod = {};
+  all.forEach(t=>{
+    if(!byMethod[t.payment]) byMethod[t.payment] = {total:0, count:0};
+    byMethod[t.payment].total += t.amount;
+    byMethod[t.payment].count += 1;
+  });
+
+  const methods = Object.keys(byMethod).sort((a,b)=>byMethod[b].total-byMethod[a].total);
+  const grandTotal = methods.reduce((s,m)=>s+byMethod[m].total,0);
+
+  let html = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <h2>${ACTIVE.label} by Card</h2>
+      <span style="font-size:13px;color:#64748b">${methods.length} method${methods.length===1?"":"s"}</span>
+    </div>`;
+
+  if (methods.length===0) {
+    html += `<div class="empty">No transactions yet.<br>Add expenses in the ${ACTIVE.label} tab, then check statement totals here.</div>`;
+  } else {
+    methods.forEach(m=>{
+      const info = byMethod[m];
+      const pct = grandTotal>0 ? (info.total/grandTotal*100) : 0;
+      html += `
+        <div class="card-summary">
+          <div class="card-summary-top">
+            <div>
+              ${badge(m)}
+              <span class="card-summary-sub" style="margin-left:8px">${info.count} transaction${info.count===1?"":"s"}</span>
+            </div>
+            <span class="card-summary-total">${fmt(info.total)}</span>
+          </div>
+          <div class="prog-wrap"><div class="prog-fill" style="width:${pct}%;background:#60a5fa"></div></div>
+        </div>`;
+    });
+
+    html += `
+      <div class="grand-total-box">
+        <span style="color:#94a3b8;font-size:14px">Total across all cards</span>
+        <span style="font-size:18px;font-weight:700;color:#f1f5f9">${fmt(grandTotal)}</span>
+      </div>
+      <div style="font-size:11px;color:#64748b;margin-top:10px;text-align:center">
+        Compare each card's total above against its statement balance to reconcile.
+      </div>`;
+  }
+
+  document.getElementById("tab-cards").innerHTML = html;
+}
+
 // ── Render history tab ─────────────────────────────────────────────────────────
 function renderHistory() {
   const hist = getHistoryMonths();
   const avgSav = getAvg("savings");
   const avgFd  = getAvg("food");
   const allCats = [
-    {key:"mortgage",label:"Mortgage",budget:3100},{key:"cell",label:"Cell Phone",budget:205},
+    {key:"mortgage",label:"Mortgage",budget:3200},{key:"cell",label:"Cell Phone",budget:166.63},
     {key:"gym",label:"Gym",budget:60},{key:"xbox",label:"Xbox",budget:23},...CATS
   ];
   const totalBudget = allCats.reduce((s,c)=>s+c.budget,0);
@@ -705,13 +765,14 @@ function renderGoals() {
 
 // ── Tab switching ──────────────────────────────────────────────────────────────
 function showTab(name) {
-  ["entry","txns","history","goals"].forEach(t=>{
+  ["entry","txns","cards","history","goals"].forEach(t=>{
     document.getElementById("tab-"+t).style.display = t===name?"block":"none";
     document.getElementById("tab-btn-"+t).classList.toggle("active", t===name);
   });
   activeTab = name;
   if (name==="entry")   renderEntry();
   if (name==="txns")    renderTxns();
+  if (name==="cards")   renderCards();
   if (name==="history") renderHistory();
   if (name==="goals")   renderGoals();
 }

@@ -159,6 +159,12 @@ tr.tot-row td { border-top: 2px solid #334155; font-weight: 700; padding: 10px 6
 .reimb-fields { display: none; }
 .reimb-fields.show { display: flex; }
 .card-sub-line { display:flex; justify-content:space-between; font-size:11px; color:#64748b; margin-top:2px; }
+.reimb-link { background:none; border:none; color:#4ade80; font-size:11px; font-family:inherit; cursor:pointer; padding:0; text-decoration:underline; }
+.reimb-clear { background:none; border:none; color:#64748b; font-size:10px; font-family:inherit; cursor:pointer; padding:0; text-decoration:underline; }
+.reimb-edit { display:none; gap:6px; margin-top:6px; }
+.reimb-edit.show { display:flex; }
+.reimb-edit .fi { font-size:12px; padding:6px 8px; }
+.reimb-edit .add-btn { padding:6px 10px; font-size:12px; }
 </style>
 
 </head>
@@ -476,7 +482,7 @@ function renderEntry() {
 
   CATS.forEach(cat=>{
     const catTxns = txns[cat.key]||[];
-    const total = catTxns.reduce((s,t)=>s+t.amount,0);
+    const total = catTxns.reduce((s,t)=>s+net(t),0);
     const over = total>cat.budget;
     const deltaColor = over?"#f87171":"#4ade80";
     const deltaText = total>0?(over?`+${fmt(total-cat.budget)} over`:`${fmt(cat.budget-total)} left`):"";
@@ -484,12 +490,19 @@ function renderEntry() {
     let txnHTML = catTxns.length>0?`<div class="txn-list">`:"";
     catTxns.forEach(t=>{
       const reimb = t.reimbursed||0;
+      const editId = `${cat.key}-${t.id}`;
       txnHTML += `
         <div class="txn-item">
           <div class="txn-left">
             <div class="txn-desc">${t.desc}</div>
-            <div class="txn-meta">${badge(t.payment)}<span>${t.date}</span></div>
-            ${reimb>0?`<div class="reimb-row"><span class="badge b-reimb">Reimbursed ${fmt(reimb)}</span></div>`:""}
+            <div class="txn-meta">${badge(t.payment)}<span>${t.date}</span>
+              <button class="reimb-link" onclick="toggleReimbEdit('${editId}')">${reimb>0?"Edit reimbursement":"+ Reimburse"}</button>
+            </div>
+            ${reimb>0?`<div class="reimb-row"><span class="badge b-reimb">Reimbursed ${fmt(reimb)}</span><button class="reimb-clear" onclick="clearReimbursement('${cat.key}',${t.id})">clear</button></div>`:""}
+            <div class="reimb-edit" id="reimbedit-${editId}">
+              <input class="fi" type="number" inputmode="decimal" placeholder="Amount reimbursed" id="reimbeditamt-${editId}" value="${reimb>0?reimb:""}">
+              <button class="add-btn" onclick="saveReimbursement('${cat.key}',${t.id},'${editId}')">Save</button>
+            </div>
           </div>
           ${reimb>0?`<span class="txn-amt strike">${fmt(t.amount)}</span>`:""}
           <span class="txn-amt">${fmt(net(t))}</span>
@@ -843,6 +856,33 @@ function addTxn(key) {
   const entry = {id:Date.now(), amount:parseFloat(amt), payment:pay, desc:desc.trim(), date};
   if (isReimb) entry.reimbursed = parseFloat(reimbAmt);
   txns[key].push(entry);
+  save();
+  renderEntry();
+  updateStats();
+}
+
+function toggleReimbEdit(editId) {
+  document.getElementById("reimbedit-"+editId)?.classList.toggle("show");
+}
+
+function saveReimbursement(catKey, id, editId) {
+  const val = document.getElementById("reimbeditamt-"+editId)?.value;
+  if (!val || parseFloat(val)<=0) return;
+  const list = txns[catKey]||[];
+  const t = list.find(x=>x.id===id);
+  if (!t) return;
+  if (parseFloat(val) > t.amount) { alert("Reimbursed amount can't exceed the amount paid ("+fmt(t.amount)+")."); return; }
+  t.reimbursed = parseFloat(val);
+  save();
+  renderEntry();
+  updateStats();
+}
+
+function clearReimbursement(catKey, id) {
+  const list = txns[catKey]||[];
+  const t = list.find(x=>x.id===id);
+  if (!t) return;
+  delete t.reimbursed;
   save();
   renderEntry();
   updateStats();

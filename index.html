@@ -389,14 +389,49 @@ function getAllTxns() {
 }
 
 // ── Build history months ───────────────────────────────────────────────────────
+// Pulls a closed (non-active) month's totals directly from localStorage, so
+// every month you've actually used the app in shows up automatically —
+// not just the two hardcoded months from launch.
+function getMonthData(year, month) {
+  const raw = localStorage.getItem(storageKey(year, month));
+  if (!raw) return null;
+  let data;
+  try { data = JSON.parse(raw); } catch(e) { return null; }
+
+  const result = {};
+  FIXED_CATS.forEach(f=>{
+    const logged = (data["__fixed_"+f.key]||[]).reduce((s,t)=>s+(t.amount-(t.reimbursed||0)),0);
+    result[f.key] = logged>0 ? logged : f.budget;
+  });
+  CATS.forEach(c=>{
+    const logged = (data[c.key]||[]).reduce((s,t)=>s+(t.amount-(t.reimbursed||0)),0);
+    result[c.key] = logged;
+  });
+  return result;
+}
+
 function getHistoryMonths() {
-  return ACTIVE.isApril
-    ? [...CLOSED_HISTORY]
-    : [...CLOSED_HISTORY, APR_HISTORY];
+  const months = [];
+  // Walk every month of 2026 up to (but not including) the active month.
+  for (let m = 0; m < ACTIVE.month; m++) {
+    if (m <= 2) {
+      months.push(CLOSED_HISTORY[m]);          // Jan–Mar: hardcoded
+    } else if (m === 3) {
+      months.push(APR_HISTORY);                // Apr: hardcoded
+    } else {
+      const data = getMonthData(ACTIVE.year, m); // May onward: read from localStorage
+      if (data) months.push({label: MONTH_NAMES[m], data});
+      // If no data exists for a month (e.g. app wasn't opened that month,
+      // or localStorage was cleared/synced on a different device), it's
+      // simply skipped rather than shown as a $0 month.
+    }
+  }
+  return months;
 }
 
 function getAvg(field) {
   const h = getHistoryMonths();
+  if (h.length === 0) return 0;
   return h.reduce((s,m)=>s+(m.data[field]||0),0)/h.length;
 }
 
